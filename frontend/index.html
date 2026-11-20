@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YT Reaper 2 — Automated Video Production Platform</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#fff1f2',
+              500: '#f43f5e',
+              600: '#e11d48',
+              700: '#be123c',
+              gold: '#fbbf24',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased selection:bg-rose-500 selection:text-white">
+
+  <!-- Top Navigation -->
+  <header class="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3 cursor-pointer" onclick="resetToStart()">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-600 via-red-500 to-amber-400 flex items-center justify-center shadow-lg shadow-rose-900/40">
+          <i data-lucide="video" class="w-5 h-5 text-white"></i>
+        </div>
+        <div>
+          <span class="text-xl font-black tracking-tight bg-gradient-to-r from-white via-slate-100 to-rose-400 bg-clip-text text-transparent">YT REAPER</span>
+          <span class="text-xs px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-semibold border border-rose-500/30 ml-2">2.0 Studio</span>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-3">
+        <!-- YouTube Channel Auth Button / Badge -->
+        <button id="ytAccountBtn" onclick="openAuthModal()" class="flex items-center space-x-2 text-xs font-medium px-3.5 py-1.5 rounded-full border border-slate-700 bg-slate-800/80 hover:bg-slate-800 transition shadow-sm">
+          <i data-lucide="youtube" class="w-4 h-4 text-red-500"></i>
+          <span id="ytAccountLabel">Connect YouTube</span>
+        </button>
+
+        <!-- Settings Modal Button -->
+        <button onclick="openSettingsModal()" class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition" title="API Keys & Settings">
+          <i data-lucide="settings" class="w-5 h-5"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+    <!-- VIEW 1: START SCREEN -->
+    <section id="viewStart" class="space-y-10">
+      <!-- Hero Banner -->
+      <div class="text-center max-w-3xl mx-auto space-y-4 pt-4">
+        <h1 class="text-4xl sm:text-5xl font-extrabold tracking-tight">
+          Turn Any YouTube Link or Niche into
+          <span class="bg-gradient-to-r from-rose-400 via-amber-300 to-rose-500 bg-clip-text text-transparent">Ready-to-Publish Videos</span>
+        </h1>
+        <p class="text-slate-400 text-base sm:text-lg">
+          No manual timeline editing. Automatically discovers the best 10 source clips, plans the narrative hook, edits, synchronizes captions, and delivers full publishing packages.
+        </p>
+      </div>
+
+      <!-- Main Creation Form Card -->
+      <div class="max-w-3xl mx-auto bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl shadow-black/80 space-y-8 backdrop-blur-xl">
+        
+        <!-- 1. Input: YouTube Link or Niche -->
+        <div class="space-y-2">
+          <label class="block text-sm font-semibold text-slate-200">
+            YouTube link or niche
+          </label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+              <i data-lucide="search" class="w-5 h-5"></i>
+            </div>
+            <input 
+              type="text" 
+              id="topicInput" 
+              placeholder="e.g. cinematic places to visit in Rajasthan or https://youtube.com/..." 
+              value="cinematic places to visit in Rajasthan"
+              class="w-full bg-slate-950/80 border border-slate-700/80 rounded-2xl pl-12 pr-4 py-3.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500/50 focus:border-rose-500 transition text-sm sm:text-base"
+            >
+          </div>
+          <!-- Quick Topic Pills -->
+          <div class="flex flex-wrap items-center gap-2 pt-1 text-xs text-slate-400">
+            <span class="text-slate-500">Popular niches:</span>
+            <button onclick="setTopic('cinematic places to visit in Rajasthan')" class="px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition">
+              🕌 Rajasthan Travel
+            </button>
+            <button onclick="setTopic('ancient roman engineering wonders')" class="px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition">
+              🏛️ Ancient Engineering
+            </button>
+            <button onclick="setTopic('hidden culinary street food of Tokyo')" class="px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition">
+              🍜 Tokyo Street Food
+            </button>
+          </div>
+        </div>
+
+        <!-- 2. Format Selector -->
+        <div class="space-y-3">
+          <label class="block text-sm font-semibold text-slate-200">
+            Select Video Format
+          </label>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Format A -->
+            <label class="relative flex flex-col p-5 rounded-2xl border-2 cursor-pointer transition select-none group" id="formatACard">
+              <input type="radio" name="formatChoice" value="format_a_4min" checked class="sr-only" onchange="onFormatChange()">
+              <div class="flex items-center justify-between mb-3">
+                <div class="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 group-hover:scale-105 transition">
+                  <i data-lucide="film" class="w-5 h-5"></i>
+                </div>
+                <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">16:9 Widescreen</span>
+              </div>
+              <h3 class="text-base font-bold text-white mb-1">One 4-minute story</h3>
+              <p class="text-xs text-slate-400">Cohesive narrative from all 10 sources with opening hook, paced progression, and satisfying conclusion.</p>
+            </label>
+
+            <!-- Format B -->
+            <label class="relative flex flex-col p-5 rounded-2xl border-2 cursor-pointer transition select-none group" id="formatBCard">
+              <input type="radio" name="formatChoice" value="format_b_shorts" class="sr-only" onchange="onFormatChange()">
+              <div class="flex items-center justify-between mb-3">
+                <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 group-hover:scale-105 transition">
+                  <i data-lucide="smartphone" class="w-5 h-5"></i>
+                </div>
+                <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">9:16 Vertical</span>
+              </div>
+              <h3 class="text-base font-bold text-white mb-1">10 YouTube Shorts</h3>
+              <p class="text-xs text-slate-400">10 standalone vertical videos (20–60s) with vertical reframing, instant hooks, and individual metadata.</p>
+            </label>
+          </div>
+        </div>
+
+        <!-- 3. AI Voiceover Toggle & Voice Controls -->
+        <div class="p-5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <div class="w-9 h-9 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                <i data-lucide="mic" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <h4 class="text-sm font-semibold text-slate-200">AI Voiceover</h4>
+                <p class="text-xs text-slate-400" id="voiceoverSubtext">Generates original grounded narration and times visuals to speech</p>
+              </div>
+            </div>
+            <!-- Toggle switch -->
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="voiceoverToggle" checked class="sr-only peer" onchange="onVoiceoverToggle()">
+              <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+            </label>
+          </div>
+
+          <!-- Voice & Language Controls (when voiceover is active) -->
+          <div id="voiceControlsContainer" class="pt-2 border-t border-slate-800/80 flex flex-col sm:flex-row items-center gap-3">
+            <div class="w-full sm:flex-1">
+              <label class="block text-xs font-medium text-slate-400 mb-1">Narration Voice & Accent</label>
+              <select id="voiceSelect" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-rose-500">
+                <!-- Dynamically populated -->
+              </select>
+            </div>
+            <div class="w-full sm:w-auto pt-3 sm:pt-4">
+              <button onclick="previewSelectedVoice()" id="previewVoiceBtn" class="w-full sm:w-auto flex items-center justify-center space-x-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 transition">
+                <i data-lucide="volume-2" class="w-4 h-4 text-rose-400"></i>
+                <span>Preview Voice</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Notice when voiceover is disabled -->
+          <div id="voiceDisabledNotice" class="hidden text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-start space-x-2">
+            <i data-lucide="info" class="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-400"></i>
+            <span>Original audio mode active: The video will be edited using authentic ambient audio, balanced levels, location subtitles, and on-screen chapter text.</span>
+          </div>
+        </div>
+
+        <!-- 4. Optional "Upload my footage" control -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="block text-sm font-semibold text-slate-200">
+              Upload my footage <span class="text-xs font-normal text-slate-400">(optional)</span>
+            </label>
+            <span class="text-xs text-slate-500">Supply your own source files to replace discovered clips</span>
+          </div>
+          
+          <div id="dropzone" onclick="document.getElementById('footageFileInput').click()" class="border-2 border-dashed border-slate-700 hover:border-rose-500/60 rounded-2xl p-6 text-center cursor-pointer transition bg-slate-950/40 hover:bg-slate-900/50">
+            <input type="file" id="footageFileInput" multiple accept="video/mp4,video/quicktime,video/mkv" class="sr-only" onchange="handleFootageFiles(this.files)">
+            <div class="flex flex-col items-center justify-center space-y-2">
+              <div class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400">
+                <i data-lucide="upload-cloud" class="w-5 h-5"></i>
+              </div>
+              <p class="text-xs sm:text-sm text-slate-300 font-medium">Click to upload footage or drag and drop video files here</p>
+              <p class="text-[11px] text-slate-500">MP4, MOV up to 1GB each. Discovered clips without uploads use authorized licensed footage.</p>
+            </div>
+          </div>
+
+          <!-- Uploaded files list -->
+          <div id="uploadedFilesList" class="hidden space-y-2 pt-2">
+            <!-- Dynamically populated list of uploaded files -->
+          </div>
+        </div>
+
+        <!-- 5. Primary Generate Button -->
+        <div class="pt-4">
+          <button 
+            id="generateBtn" 
+            onclick="startGenerationWorkflow()"
+            class="w-full py-4 px-6 rounded-2xl font-bold text-base sm:text-lg text-white bg-gradient-to-r from-rose-600 via-rose-500 to-amber-500 hover:from-rose-500 hover:to-amber-400 shadow-xl shadow-rose-900/30 hover:shadow-rose-900/50 active:scale-[0.99] transition transform flex items-center justify-center space-x-3"
+          >
+            <i data-lucide="sparkles" class="w-5 h-5"></i>
+            <span>Generate videos</span>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Section: Discovered Source Preview (Pre-flight or Discovery inspector) -->
+      <div id="sourcesPreviewContainer" class="hidden max-w-5xl mx-auto space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-lg font-bold text-white">Discovered & Ranked Source Candidates</h3>
+            <p class="text-xs text-slate-400">Ranked by engagement relative to age, visual clarity, and narrative variety</p>
+          </div>
+          <span id="sourcesCountBadge" class="text-xs px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">10 / 10 Ready</span>
+        </div>
+
+        <div id="sourcesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <!-- Dynamically populated 10 source cards -->
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 2: JOB PROGRESS & RENDERING SCREEN -->
+    <section id="viewProgress" class="hidden max-w-4xl mx-auto space-y-8 py-8">
+      <div class="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-2xl space-y-8 backdrop-blur-xl">
+        
+        <div class="text-center space-y-2">
+          <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-semibold">
+            <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+            <span>Video Processing Engine Active</span>
+          </div>
+          <h2 class="text-2xl sm:text-3xl font-extrabold text-white" id="progressTitle">Crafting Your Video...</h2>
+          <p class="text-slate-400 text-sm" id="progressSubtitle">You can leave this page and return at any time. State is continuously saved.</p>
+          
+          <!-- Connection Warning Badge if polling has issues -->
+          <div id="connectionWarnBadge" class="hidden text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-400"></i>
+              <span>Network connection slow or checking state. If your video is already done, click check results:</span>
+            </div>
+            <button onclick="if(currentJobId) startPollingJob(currentJobId)" class="px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 font-bold text-[11px] hover:bg-amber-400 transition">
+              Check Results
+            </button>
+          </div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="space-y-2">
+          <div class="flex justify-between text-xs font-semibold text-slate-300">
+            <span id="currentStageText">Initializing job...</span>
+            <span id="progressPercentText" class="text-rose-400 font-mono">0%</span>
+          </div>
+          <div class="w-full h-3 rounded-full bg-slate-950 overflow-hidden border border-slate-800 p-0.5">
+            <div id="progressBarFill" class="h-full rounded-full bg-gradient-to-r from-rose-600 via-rose-500 to-amber-400 transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <!-- Ready Button if 100% -->
+        <div id="readyActionArea" class="hidden text-center pt-1">
+          <button onclick="if(currentJobResult) { showView('viewResults'); renderResults(currentJobResult); } else if(currentJobId) { startPollingJob(currentJobId); }" class="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-bold text-sm sm:text-base shadow-xl shadow-emerald-950/40 hover:scale-105 active:scale-95 transition transform inline-flex items-center space-x-2">
+            <i data-lucide="play-circle" class="w-5 h-5"></i>
+            <span>View Completed Videos Now</span>
+          </button>
+        </div>
+
+        <!-- Pipeline Stages Indicator -->
+        <div class="grid grid-cols-2 sm:grid-cols-6 gap-2 pt-2">
+          <div id="step-discovery" class="p-3 rounded-xl bg-slate-950 border border-slate-800 text-center space-y-1">
+            <i data-lucide="compass" class="w-4 h-4 mx-auto text-slate-500"></i>
+            <p class="text-[11px] font-semibold text-slate-400">1. Discovery</p>
+          </div>
+          <div id="step-footage" class="p-3 rounded-xl bg-slate-950 border border-slate-800 text-center space-y-1">
+            <i data-lucide="film" class="w-4 h-4 mx-auto text-slate-500"></i>
+            <p class="text-[11px] font-semibold text-slate-400">2. Footage</p>
+          </div>
+          <div id="step-story" class="p-3 rounded-xl bg-slate-950 border border-slate-800 text-center space-y-1">
+            <i data-lucide="book-open" class="w-4 h-4 mx-auto text-slate-500"></i>
+            <p class="text-[11px] font-semibold text-slate-400">3. Story Hook</p>
+          </div>
+          <div id="step-edit" class="p-3 rounded-xl bg-slate-950 border border-slate-800 text-center space-y-1">
+            <i data-lucide="scissors" class="w-4 h-4 mx-auto text-slate-500"></i>
+            <p class="text-[11px] font-semibold text-slate-400">4. Rendering</p>
+          </div>
+          <div id="step-captions" class="p-3 rounded-xl bg-slate-950 border border-slate-800 text-center space-y-1">
+            <i data-lucide="subtitles" class="w-4 h-4 mx-auto text-slate-500"></i>
+            <p class="text-[11px] font-semibold text-slate-400">5. Captions</p>
+          </div>
+          <div id="step-export" class="p-3 rounded-xl bg-slate-950 border border-slate-800 text-center space-y-1">
+            <i data-lucide="package-check" class="w-4 h-4 mx-auto text-slate-500"></i>
+            <p class="text-[11px] font-semibold text-slate-400">6. Export</p>
+          </div>
+        </div>
+
+        <!-- Terminal Logs -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between text-xs text-slate-400">
+            <span>Execution Logs</span>
+            <span id="jobIdDisplay" class="font-mono text-[10px] text-slate-500"></span>
+          </div>
+          <div id="logConsole" class="bg-black/80 rounded-2xl p-4 font-mono text-xs text-emerald-400 h-44 overflow-y-auto border border-slate-800/80 space-y-1">
+            <div>[00:00:00] Initializing pipeline worker...</div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- VIEW 3: RESULTS, DOWNLOADS & YOUTUBE PUBLISHING SCREEN -->
+    <section id="viewResults" class="hidden space-y-8">
+      
+      <!-- Top Bar: Success Banner & Reset -->
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-4 bg-emerald-950/30 border border-emerald-500/30 rounded-2xl p-4 sm:p-5">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+            <i data-lucide="check-circle-2" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-white">Video Generation Complete!</h3>
+            <p class="text-xs text-slate-300">Ready for instant download, SRT subtitles, and direct YouTube upload.</p>
+          </div>
+        </div>
+        <div class="flex items-center space-x-3 w-full sm:w-auto">
+          <button onclick="resetToStart()" class="w-full sm:w-auto px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition">
+            Generate New Project
+          </button>
+        </div>
+      </div>
+
+      <!-- Container for Results depending on Format A or B -->
+      <div id="resultsContainer">
+        <!-- Rendered dynamically by JavaScript -->
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- YOUTUBE UPLOAD CONFIRMATION MODAL -->
+  <div id="uploadModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-xl w-full p-6 sm:p-8 space-y-6 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div class="flex items-center space-x-3">
+          <div class="w-9 h-9 rounded-xl bg-red-600/20 text-red-500 flex items-center justify-center">
+            <i data-lucide="youtube" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-white">Upload to YouTube</h3>
+            <p class="text-xs text-slate-400">Review publishing details before confirming upload</p>
+          </div>
+        </div>
+        <button onclick="closeUploadModal()" class="text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Channel Target Card -->
+      <div class="flex items-center space-x-3 p-3.5 rounded-xl bg-slate-950 border border-slate-800">
+        <img id="uploadModalChannelAvatar" src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80&h=80&fit=crop" class="w-10 h-10 rounded-full border border-slate-700">
+        <div class="flex-1 min-w-0">
+          <p class="text-xs font-bold text-white truncate" id="uploadModalChannelTitle">Creative Studio Demo Channel</p>
+          <p class="text-[11px] text-slate-400" id="uploadModalChannelSub">@ReaperTravel • 24.8K subscribers</p>
+        </div>
+        <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold">Authorized</span>
+      </div>
+
+      <!-- Upload Details Form -->
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Video Title</label>
+          <input type="text" id="modalUploadTitle" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Description</label>
+          <textarea id="modalUploadDesc" rows="4" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Privacy Setting</label>
+          <select id="modalUploadPrivacy" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+            <option value="private" selected>Private (Recommended - Only you can view)</option>
+            <option value="unlisted">Unlisted (Anyone with the link can view)</option>
+            <option value="public">Public (Everyone can watch)</option>
+          </select>
+          <p class="text-[11px] text-slate-500 mt-1">Defaulted to private for safety. Requires explicit confirmation.</p>
+        </div>
+
+        <div class="flex items-center space-x-2 pt-2">
+          <input type="checkbox" id="modalUploadConfirmCheck" class="rounded border-slate-700 bg-slate-950 text-rose-600 focus:ring-rose-500">
+          <label for="modalUploadConfirmCheck" class="text-xs text-slate-300 select-none cursor-pointer">
+            I confirm I want to upload this video to my YouTube channel.
+          </label>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center justify-end space-x-3 pt-2">
+        <button onclick="closeUploadModal()" class="px-4 py-2 rounded-xl bg-slate-800 text-xs font-semibold text-slate-300 hover:bg-slate-700 transition">Cancel</button>
+        <button onclick="executeYouTubeUpload()" id="modalConfirmUploadBtn" disabled class="px-5 py-2.5 rounded-xl bg-red-600 text-xs font-bold text-white hover:bg-red-500 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2">
+          <i data-lucide="upload" class="w-4 h-4"></i>
+          <span>Confirm & Upload</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div id="settingsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-6 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div class="flex items-center space-x-2">
+          <i data-lucide="settings" class="w-5 h-5 text-slate-400"></i>
+          <h3 class="text-base font-bold text-white">Platform Settings & Credentials</h3>
+        </div>
+        <button onclick="closeSettingsModal()" class="text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">YouTube Data API v3 Key <span class="text-slate-500 font-normal">(Optional)</span></label>
+          <input type="text" id="settingsYtApiKey" placeholder="AIzaSy..." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+          <p class="text-[11px] text-slate-500 mt-1">If omitted, intelligent scrapetube discovery is used automatically.</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Google OAuth Client ID <span class="text-slate-500 font-normal">(For live channel uploads)</span></label>
+          <input type="text" id="settingsClientId" placeholder="xxxx.apps.googleusercontent.com" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Google OAuth Client Secret</label>
+          <input type="password" id="settingsClientSecret" placeholder="GOCSPX-..." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+        </div>
+
+        <!-- Demo Account Connect Helper -->
+        <div class="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between">
+          <div>
+            <p class="text-xs font-semibold text-white">Simulated Demo Channel</p>
+            <p class="text-[11px] text-slate-400">Test the complete upload flow without setting up GCP credentials.</p>
+          </div>
+          <button onclick="enableDemoChannel()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-rose-400 border border-slate-700 transition">
+            Enable Demo
+          </button>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end space-x-3 pt-2">
+        <button onclick="closeSettingsModal()" class="px-4 py-2 rounded-xl bg-slate-800 text-xs font-semibold text-slate-300">Close</button>
+        <button onclick="saveSettings()" class="px-5 py-2 rounded-xl bg-rose-600 text-xs font-bold text-white hover:bg-rose-500 transition">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

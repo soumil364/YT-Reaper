@@ -1,0 +1,24 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+*.log
+
+# Media & Render Artifacts
+media/jobs/
+media/samples/
+media/uploads/
+*.mp4
+*.zip
+*.mkv
+*.mov
+
+# Node & Dependencies
+node_modules/
+package-lock.json
+
+# Local Tokens & Configurations
+youtube_tokens.json
+settings.json
+tunnel_url.txt
