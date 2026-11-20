@@ -50,3 +50,64 @@
 .shorts-overlay-gradient {
   background: linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0) 25%, rgba(0,0,0,0) 70%, rgba(0,0,0,0.85) 100%);
 }
+
+/* Dev Console Styles */
+#devConsoleContainer {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+}
+#devConsoleContainer.dev-console-hidden {
+  transform: translateY(110%);
+  opacity: 0;
+  pointer-events: none;
+}
+#devConsoleContainer.dev-console-visible {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+#devConsoleContainer.dev-console-maximized {
+  height: 94vh !important;
+  max-height: 94vh !important;
+}
+
+.dev-log-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  word-break: break-all;
+}
+.dev-log-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.dev-log-row.log-error {
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+  border-left: 3px solid #ef4444;
+}
+.dev-log-row.log-warn {
+  background: rgba(245, 158, 11, 0.10);
+  color: #fde047;
+  border-left: 3px solid #f59e0b;
+}
+.dev-log-row.log-success {
+  color: #6ee7b7;
+  border-left: 3px solid #10b981;
+}
+.dev-log-row.log-info {
+  color: #cbd5e1;
+}
+.dev-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}

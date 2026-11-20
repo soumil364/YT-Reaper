@@ -14,8 +14,42 @@ from backend.discovery import discover_youtube_candidates
 from backend.tts_engine import get_available_voices, generate_voice_preview
 from backend.job_manager import create_job, start_job_in_background, get_job
 from backend.youtube_uploader import get_channel_info, upload_video_to_youtube, save_tokens, get_oauth_settings
+from backend.logger import add_server_log, get_server_logs, clear_server_logs
+import time
 
 app = FastAPI(title="YT Reaper - Automated Video Production Platform")
+
+@app.middleware("http")
+async def log_requests_middleware(request: Request, call_next):
+    start_time = time.time()
+    path = request.url.path
+    method = request.method
+    client_ip = request.client.host if request.client else "unknown"
+
+    # Avoid logging dev logs polling itself to prevent infinite feedback loop
+    is_dev_poll = path.startswith("/api/dev/logs")
+
+    try:
+        response = await call_next(request)
+        duration_ms = round((time.time() - start_time) * 1000, 1)
+        if not is_dev_poll and not path.startswith("/static/"):
+            lvl = "INFO" if response.status_code < 400 else ("WARN" if response.status_code < 500 else "ERROR")
+            add_server_log(
+                level=lvl,
+                category="HTTP",
+                message=f"{method} {path} -> {response.status_code} ({duration_ms}ms)",
+                meta={"method": method, "path": path, "status": response.status_code, "duration_ms": duration_ms, "client": client_ip}
+            )
+        return response
+    except Exception as exc:
+        duration_ms = round((time.time() - start_time) * 1000, 1)
+        add_server_log(
+            level="ERROR",
+            category="HTTP",
+            message=f"{method} {path} CRASHED: {str(exc)}",
+            meta={"method": method, "path": path, "error": str(exc), "duration_ms": duration_ms}
+        )
+        raise
 
 app.add_middleware(
     CORSMiddleware,
@@ -198,3 +232,48 @@ async def api_update_settings(data: dict):
 @app.get("/api/health")
 async def api_health():
     return {"status": "ok", "app": "YT Reaper 2"}
+
+# Dev Console Endpoints
+@app.get("/api/dev/logs")
+async def api_dev_logs(limit: int = 300, category: Optional[str] = None, level: Optional[str] = None):
+    # Collect recent jobs summary for the dev inspector
+    recent_jobs = []
+    try:
+        if JOBS_DIR.exists():
+            for p in sorted(JOBS_DIR.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True)[:10]:
+                state_file = p / "job_state.json"
+                if state_file.exists():
+                    try:
+                        jd = json.loads(state_file.read_text(encoding="utf-8"))
+                        recent_jobs.append({
+                            "job_id": jd.get("job_id", p.name),
+                            "topic": jd.get("topic", "Unknown"),
+                            "status": jd.get("status", "unknown"),
+                            "progress": jd.get("progress", 0),
+                            "format": jd.get("format_type"),
+                            "current_stage": jd.get("current_stage", ""),
+                            "logs_count": len(jd.get("logs", [])),
+                            "updated_at": jd.get("updated_at", p.stat().st_mtime)
+                        })
+                    except Exception:
+                        pass
+    except Exception as e:
+        add_server_log("WARN", "DEV", f"Failed reading recent jobs: {str(e)}")
+
+    return {
+        "server_time": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "logs": get_server_logs(limit=limit, category=category, level=level),
+        "recent_jobs": recent_jobs,
+        "diagnostics": {
+            "uptime_check": "active",
+            "jobs_directory": str(JOBS_DIR),
+            "total_jobs_stored": len(list(JOBS_DIR.iterdir())) if JOBS_DIR.exists() else 0,
+            "uploads_stored": len(list(UPLOADS_DIR.iterdir())) if UPLOADS_DIR.exists() else 0
+        }
+    }
+
+@app.post("/api/dev/logs/clear")
+async def api_dev_logs_clear():
+    clear_server_logs()
+    add_server_log("INFO", "DEV", "Server log buffer cleared by developer console.")
+    return {"success": True, "message": "Server logs cleared"}

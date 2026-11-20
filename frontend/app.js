@@ -844,3 +844,527 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 }
+
+/* ==========================================================================
+   DEVELOPER CONSOLE (Shortcut: Ctrl + Z + Z)
+   Captures Console, Network (Fetch), Backend Server Logs & Job Diagnostics
+   ========================================================================== */
+
+const devLogStore = [];
+let devErrorCount = 0;
+let isDevConsoleOpen = false;
+let isDevConsoleMaximized = false;
+let currentDevFilter = "all";
+let devServerPollInterval = null;
+let lastSeenServerLogId = null;
+let recentDevJobs = [];
+
+// Push a log into dev store
+function pushDevLog(type, level, message, details = null) {
+  const d = new Date();
+  const timeStr = d.toTimeString().split(" ")[0] + "." + String(d.getMilliseconds()).padStart(3, "0");
+  const entry = {
+    id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    time: timeStr,
+    timestamp: Date.now(),
+    type: type.toLowerCase(),   // 'console', 'network', 'server', 'worker', 'job'
+    level: level.toLowerCase(), // 'info', 'warn', 'error', 'success'
+    message: String(message),
+    details: details
+  };
+
+  devLogStore.push(entry);
+  if (devLogStore.length > 2000) devLogStore.shift();
+
+  if (entry.level === "error") {
+    devErrorCount++;
+    const badge = document.getElementById("devErrorCounterBadge");
+    if (badge) {
+      badge.innerText = devErrorCount;
+      badge.classList.remove("hidden");
+    }
+    const dot = document.getElementById("devConsoleDot");
+    if (dot) {
+      dot.classList.remove("bg-emerald-400");
+      dot.classList.add("bg-red-500");
+    }
+  }
+
+  updateDevCounts();
+
+  if (isDevConsoleOpen && currentDevFilter !== "jobs") {
+    if (matchesDevFilter(entry, currentDevFilter)) {
+      appendDevLogDOM(entry);
+    }
+  }
+}
+
+// Intercept browser console
+(function initConsoleInterceptor() {
+  const origLog = console.log;
+  const origWarn = console.warn;
+  const origError = console.error;
+  const origInfo = console.info;
+
+  console.log = function(...args) {
+    origLog.apply(console, args);
+    const msg = args.map(a => typeof a === "object" ? JSON.stringify(a) : a).join(" ");
+    pushDevLog("console", "info", msg);
+  };
+  console.info = function(...args) {
+    origInfo.apply(console, args);
+    const msg = args.map(a => typeof a === "object" ? JSON.stringify(a) : a).join(" ");
+    pushDevLog("console", "info", msg);
+  };
+  console.warn = function(...args) {
+    origWarn.apply(console, args);
+    const msg = args.map(a => typeof a === "object" ? JSON.stringify(a) : a).join(" ");
+    pushDevLog("console", "warn", msg);
+  };
+  console.error = function(...args) {
+    origError.apply(console, args);
+    const msg = args.map(a => typeof a === "object" ? (a && a.stack ? a.stack : JSON.stringify(a)) : a).join(" ");
+    pushDevLog("console", "error", msg);
+  };
+
+  window.addEventListener("error", (e) => {
+    pushDevLog("console", "error", `Uncaught Script Error: ${e.message} (${e.filename}:${e.lineno}:${e.colno})`);
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    const reason = e.reason ? (e.reason.stack || e.reason.message || JSON.stringify(e.reason)) : "Unknown rejection";
+    pushDevLog("console", "error", `Unhandled Promise Rejection: ${reason}`);
+  });
+})();
+
+// Intercept window.fetch for network logging
+(function initFetchInterceptor() {
+  const origFetch = window.fetch;
+  window.fetch = async function(...args) {
+    const rawUrl = typeof args[0] === "string" ? args[0] : (args[0] && args[0].url ? args[0].url : "unknown");
+    const method = (args[1] && args[1].method) ? args[1].method.toUpperCase() : "GET";
+    const startTime = performance.now();
+
+    // Skip dev log endpoint to avoid recursion
+    if (rawUrl.includes("/api/dev/logs")) {
+      return origFetch.apply(this, args);
+    }
+
+    try {
+      const res = await origFetch.apply(this, args);
+      const duration = Math.round(performance.now() - startTime);
+      const lvl = res.ok ? (res.status >= 300 ? "warn" : "info") : "error";
+      pushDevLog("network", lvl, `${method} ${rawUrl} -> ${res.status} ${res.statusText} (${duration}ms)`, {
+        method, url: rawUrl, status: res.status, statusText: res.statusText, duration
+      });
+      return res;
+    } catch (err) {
+      const duration = Math.round(performance.now() - startTime);
+      pushDevLog("network", "error", `${method} ${rawUrl} FAILED (${duration}ms) - ${err.message}`, {
+        method, url: rawUrl, error: err.message, duration
+      });
+      throw err;
+    }
+  };
+})();
+
+// Shortcut listener: Ctrl + Z + Z
+(function initShortcutListener() {
+  let lastZTime = 0;
+
+  window.addEventListener("keydown", (e) => {
+    const isCtrl = e.ctrlKey || e.metaKey;
+
+    // Detect Z key
+    if (e.key === "z" || e.key === "Z") {
+      const now = Date.now();
+      // If Ctrl was held or recently active, and another Z is pressed within 750ms
+      if (isCtrl || (now - lastZTime < 750)) {
+        if (now - lastZTime < 750) {
+          // Double-tap Z with Ctrl detected!
+          e.preventDefault();
+          toggleDevConsole();
+          lastZTime = 0;
+          return;
+        } else if (isCtrl) {
+          lastZTime = now;
+        }
+      }
+    }
+
+    // Escape closes dev console
+    if (e.key === "Escape" && isDevConsoleOpen) {
+      closeDevConsole();
+    }
+  });
+})();
+
+// Dev Console UI Controls
+function toggleDevConsole() {
+  if (isDevConsoleOpen) {
+    closeDevConsole();
+  } else {
+    openDevConsole();
+  }
+}
+
+function openDevConsole() {
+  const container = document.getElementById("devConsoleContainer");
+  if (!container) return;
+  isDevConsoleOpen = true;
+  container.classList.remove("dev-console-hidden");
+  container.classList.add("dev-console-visible");
+
+  // Update active job indicator
+  const activeJobEl = document.getElementById("devActiveJobId");
+  if (activeJobEl) {
+    activeJobEl.innerText = currentJobId || (currentJobResult ? currentJobResult.job_id : "None");
+  }
+
+  renderDevLogs();
+  fetchServerDevLogs();
+
+  // Start polling server logs while open
+  if (devServerPollInterval) clearInterval(devServerPollInterval);
+  devServerPollInterval = setInterval(fetchServerDevLogs, 2500);
+}
+
+function closeDevConsole() {
+  const container = document.getElementById("devConsoleContainer");
+  if (!container) return;
+  isDevConsoleOpen = false;
+  container.classList.remove("dev-console-visible");
+  container.classList.add("dev-console-hidden");
+
+  if (devServerPollInterval) {
+    clearInterval(devServerPollInterval);
+    devServerPollInterval = null;
+  }
+}
+
+function toggleDevConsoleMaximize() {
+  const container = document.getElementById("devConsoleContainer");
+  const btn = document.getElementById("devMaximizeBtn");
+  if (!container) return;
+  isDevConsoleMaximized = !isDevConsoleMaximized;
+  if (isDevConsoleMaximized) {
+    container.classList.add("dev-console-maximized");
+    if (btn) btn.innerText = "⤓";
+  } else {
+    container.classList.remove("dev-console-maximized");
+    if (btn) btn.innerText = "⤢";
+  }
+}
+
+function setDevLogFilter(filterName) {
+  currentDevFilter = filterName;
+
+  // Update tab button highlights
+  const tabs = ["all", "console", "network", "server", "errors", "jobs"];
+  tabs.forEach(t => {
+    const el = document.getElementById(`devTab-${t}`);
+    if (!el) return;
+    if (t === filterName) {
+      el.className = "px-2 py-1 rounded bg-rose-500/20 text-rose-300 font-semibold border border-rose-500/30";
+    } else {
+      el.className = "px-2 py-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800";
+    }
+  });
+
+  const logsEl = document.getElementById("devLogsOutput");
+  const jobsEl = document.getElementById("devJobsOutput");
+
+  if (filterName === "jobs") {
+    if (logsEl) logsEl.classList.add("hidden");
+    if (jobsEl) jobsEl.classList.remove("hidden");
+    renderDevJobsPanel();
+  } else {
+    if (jobsEl) jobsEl.classList.add("hidden");
+    if (logsEl) logsEl.classList.remove("hidden");
+    renderDevLogs();
+  }
+}
+
+function matchesDevFilter(entry, filter) {
+  if (filter === "all") return true;
+  if (filter === "console") return entry.type === "console";
+  if (filter === "network") return entry.type === "network";
+  if (filter === "server") return entry.type === "server" || entry.type === "worker";
+  if (filter === "errors") return entry.level === "error" || entry.level === "warn";
+  return true;
+}
+
+function updateDevCounts() {
+  const counts = {
+    all: devLogStore.length,
+    console: devLogStore.filter(e => e.type === "console").length,
+    network: devLogStore.filter(e => e.type === "network").length,
+    server: devLogStore.filter(e => e.type === "server" || e.type === "worker").length,
+    errors: devLogStore.filter(e => e.level === "error" || e.level === "warn").length,
+    jobs: recentDevJobs.length
+  };
+
+  for (const [k, v] of Object.entries(counts)) {
+    const el = document.getElementById(`devCount-${k}`);
+    if (el) el.innerText = v;
+  }
+}
+
+function appendDevLogDOM(entry) {
+  const output = document.getElementById("devLogsOutput");
+  if (!output) return;
+
+  const row = createDevLogRow(entry);
+  output.appendChild(row);
+
+  const autoScroll = document.getElementById("devAutoScrollToggle");
+  if (autoScroll && autoScroll.checked) {
+    output.scrollTop = output.scrollHeight;
+  }
+}
+
+function createDevLogRow(entry) {
+  const div = document.createElement("div");
+  div.className = `dev-log-row log-${entry.level}`;
+
+  let badgeColor = "bg-slate-800 text-slate-300 border border-slate-700";
+  if (entry.type === "network") badgeColor = "bg-cyan-950/80 text-cyan-300 border border-cyan-800/60";
+  else if (entry.type === "server" || entry.type === "worker") badgeColor = "bg-purple-950/80 text-purple-300 border border-purple-800/60";
+  else if (entry.type === "console") badgeColor = "bg-slate-900 text-slate-400 border border-slate-800";
+
+  let levelBadgeColor = "text-slate-400";
+  if (entry.level === "error") levelBadgeColor = "text-red-400 font-bold";
+  else if (entry.level === "warn") levelBadgeColor = "text-amber-400 font-bold";
+  else if (entry.level === "success") levelBadgeColor = "text-emerald-400 font-bold";
+
+  div.innerHTML = `
+    <span class="text-slate-600 select-none">${entry.time}</span>
+    <span class="dev-badge ${badgeColor}">${escapeHtml(entry.type)}</span>
+    <span class="dev-badge ${levelBadgeColor}">${escapeHtml(entry.level)}</span>
+    <span class="flex-1 select-text">${escapeHtml(entry.message)}</span>
+  `;
+
+  return div;
+}
+
+function renderDevLogs() {
+  const output = document.getElementById("devLogsOutput");
+  if (!output) return;
+
+  const searchQuery = (document.getElementById("devLogSearchInput")?.value || "").toLowerCase().trim();
+
+  output.innerHTML = "";
+  const filtered = devLogStore.filter(entry => {
+    if (!matchesDevFilter(entry, currentDevFilter)) return false;
+    if (searchQuery) {
+      const matchMsg = entry.message.toLowerCase().includes(searchQuery);
+      const matchType = entry.type.toLowerCase().includes(searchQuery);
+      return matchMsg || matchType;
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    output.innerHTML = `<div class="p-4 text-center text-slate-600">No logs found matching current filter.</div>`;
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  filtered.forEach(entry => {
+    fragment.appendChild(createDevLogRow(entry));
+  });
+  output.appendChild(fragment);
+
+  const autoScroll = document.getElementById("devAutoScrollToggle");
+  if (autoScroll && autoScroll.checked) {
+    output.scrollTop = output.scrollHeight;
+  }
+}
+
+// Fetch backend server logs
+async function fetchServerDevLogs() {
+  try {
+    const res = await window.fetch("/api/dev/logs?limit=150");
+    if (!res.ok) {
+      const statusEl = document.getElementById("devBackendStatus");
+      if (statusEl) {
+        statusEl.innerText = "Error (" + res.status + ")";
+        statusEl.className = "text-red-400 font-semibold";
+      }
+      return;
+    }
+
+    const data = await res.json();
+    const statusEl = document.getElementById("devBackendStatus");
+    if (statusEl) {
+      statusEl.innerText = "Online";
+      statusEl.className = "text-emerald-400 font-semibold";
+    }
+
+    if (data.recent_jobs) {
+      recentDevJobs = data.recent_jobs;
+      updateDevCounts();
+      if (currentDevFilter === "jobs") renderDevJobsPanel();
+    }
+
+    // Merge new server logs into devLogStore
+    if (data.logs && data.logs.length > 0) {
+      let addedAny = false;
+      data.logs.forEach(slog => {
+        const exists = devLogStore.some(e => e.id === slog.id);
+        if (!exists) {
+          const entry = {
+            id: slog.id,
+            time: slog.timestamp,
+            timestamp: slog.epoch * 1000,
+            type: slog.category.toLowerCase() === "http" ? "network" : "server",
+            level: slog.level.toLowerCase(),
+            message: slog.message,
+            details: slog.meta
+          };
+          devLogStore.push(entry);
+          addedAny = true;
+          if (entry.level === "error") devErrorCount++;
+        }
+      });
+
+      if (addedAny) {
+        devLogStore.sort((a, b) => a.timestamp - b.timestamp);
+        updateDevCounts();
+        if (isDevConsoleOpen && currentDevFilter !== "jobs") {
+          renderDevLogs();
+        }
+      }
+    }
+  } catch (err) {
+    const statusEl = document.getElementById("devBackendStatus");
+    if (statusEl) {
+      statusEl.innerText = "Offline";
+      statusEl.className = "text-red-500 font-semibold";
+    }
+  }
+}
+
+// Render Jobs Diagnostics panel
+function renderDevJobsPanel() {
+  const panel = document.getElementById("devJobsOutput");
+  if (!panel) return;
+
+  if (!recentDevJobs || recentDevJobs.length === 0) {
+    panel.innerHTML = `<div class="p-6 text-center text-slate-500">No jobs found in server storage.</div>`;
+    return;
+  }
+
+  let html = `
+    <div class="mb-4 flex items-center justify-between">
+      <h4 class="font-bold text-white text-sm">Server Job History (${recentDevJobs.length})</h4>
+      <p class="text-[11px] text-slate-400">Click any job below to inspect its logs or load finished results directly.</p>
+    </div>
+    <div class="border border-slate-800 rounded-xl overflow-hidden bg-slate-900/60 divide-y divide-slate-800">
+  `;
+
+  recentDevJobs.forEach(j => {
+    let statusBadge = "bg-yellow-500/10 text-yellow-400 border border-yellow-500/30";
+    if (j.status === "completed") statusBadge = "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30";
+    else if (j.status === "failed") statusBadge = "bg-red-500/10 text-red-400 border border-red-500/30";
+
+    html += `
+      <div class="p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:bg-slate-800/40 transition">
+        <div class="space-y-1">
+          <div class="flex items-center space-x-2">
+            <span class="font-bold text-white">${escapeHtml(j.topic)}</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-semibold ${statusBadge}">${j.status.toUpperCase()} (${j.progress}%)</span>
+            <span class="text-slate-500 text-[10px]">${j.format || "unknown"}</span>
+          </div>
+          <p class="text-[11px] text-slate-400">${escapeHtml(j.current_stage || "No stage message")}</p>
+          <p class="text-[10px] text-slate-500 font-mono">Job ID: <span class="text-slate-300">${j.job_id}</span></p>
+        </div>
+
+        <div class="flex items-center space-x-2 flex-shrink-0">
+          <button onclick="loadJobDirectly('${j.job_id}')" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition">
+            Load Results
+          </button>
+          <button onclick="inspectJobLogs('${j.job_id}')" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700 transition">
+            Inspect Logs
+          </button>
+        </div>
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+  panel.innerHTML = html;
+}
+
+// Inspect a job's specific logs
+async function inspectJobLogs(jobId) {
+  try {
+    const res = await window.fetch(`/api/jobs/${jobId}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const job = await res.json();
+    if (job.logs && job.logs.length > 0) {
+      job.logs.forEach(l => {
+        pushDevLog("worker", "info", `[${jobId}] ${l}`);
+      });
+      setDevLogFilter("server");
+    } else {
+      alert(`No logs stored for job ${jobId}`);
+    }
+  } catch (e) {
+    alert(`Could not fetch logs for ${jobId}: ${e.message}`);
+  }
+}
+
+// Load a past job directly into results
+async function loadJobDirectly(jobId) {
+  try {
+    const res = await window.fetch(`/api/jobs/${jobId}`);
+    if (!res.ok) throw new Error(`Job ${jobId} not found`);
+    const job = await res.json();
+    currentJobId = job.job_id;
+    currentJobResult = job;
+
+    if (job.status === "completed" && job.result) {
+      showView("viewResults");
+      renderResults(job);
+      closeDevConsole();
+    } else {
+      showView("viewProgress");
+      startPollingJob(job.job_id);
+      closeDevConsole();
+    }
+  } catch (err) {
+    alert(`Failed to load job: ${err.message}`);
+  }
+}
+
+// Copy all logs to clipboard
+function copyAllDevLogs() {
+  const text = devLogStore.map(e => `[${e.time}] [${e.type.toUpperCase()}] [${e.level.toUpperCase()}] ${e.message}`).join("\n");
+  navigator.clipboard.writeText(text).then(() => {
+    alert(`Copied ${devLogStore.length} log lines to clipboard!`);
+  }).catch(() => {
+    prompt("Copy logs manually:", text);
+  });
+}
+
+// Clear logs
+async function clearAllDevLogs() {
+  devLogStore.length = 0;
+  devErrorCount = 0;
+  const badge = document.getElementById("devErrorCounterBadge");
+  if (badge) badge.classList.add("hidden");
+  const dot = document.getElementById("devConsoleDot");
+  if (dot) {
+    dot.classList.remove("bg-red-500");
+    dot.classList.add("bg-emerald-400");
+  }
+
+  try {
+    await window.fetch("/api/dev/logs/clear", { method: "POST" });
+  } catch (e) {}
+
+  renderDevLogs();
+  updateDevCounts();
+}
+
+

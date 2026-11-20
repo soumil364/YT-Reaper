@@ -474,6 +474,86 @@
     </div>
   </div>
 
+  <!-- Dev Console Floating Shortcut Button (Bottom-Right) -->
+  <button id="devConsolePillBtn" onclick="toggleDevConsole()" class="fixed bottom-4 right-4 z-40 flex items-center space-x-2 px-3 py-1.5 rounded-full bg-slate-900/95 border border-slate-700/80 hover:border-rose-500/80 text-xs text-slate-300 hover:text-white shadow-xl backdrop-blur-md transition-all group">
+    <span class="w-2 h-2 rounded-full bg-emerald-400 group-hover:animate-ping" id="devConsoleDot"></span>
+    <span class="font-mono text-[11px] font-semibold text-rose-400">Ctrl+Z+Z</span>
+    <span class="text-slate-400 hidden sm:inline text-[11px]">Dev Logs</span>
+    <span id="devErrorCounterBadge" class="hidden px-1.5 py-0.2 rounded-full bg-red-500/20 text-red-400 text-[10px] font-bold border border-red-500/40">0</span>
+  </button>
+
+  <!-- Dev Console Terminal Overlay / Drawer -->
+  <div id="devConsoleContainer" class="dev-console-hidden fixed bottom-0 left-0 right-0 z-50 h-[420px] max-h-[92vh] bg-slate-950/95 border-t border-slate-700 shadow-2xl flex flex-col font-mono text-xs backdrop-blur-xl">
+    
+    <!-- Header Bar -->
+    <div class="flex flex-wrap items-center justify-between px-4 py-2.5 bg-slate-900/90 border-b border-slate-800 select-none gap-2">
+      <div class="flex items-center space-x-3">
+        <div class="flex items-center space-x-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+          <span class="font-bold text-white tracking-wide">Developer Console</span>
+          <span class="px-2 py-0.5 rounded bg-slate-800 text-[10px] text-slate-400 border border-slate-700 hidden md:inline">Ctrl + Z + Z</span>
+        </div>
+
+        <!-- Filter Tabs -->
+        <div class="flex items-center space-x-1 pl-3 border-l border-slate-800 text-[11px]" id="devConsoleTabs">
+          <button onclick="setDevLogFilter('all')" id="devTab-all" class="px-2 py-1 rounded bg-rose-500/20 text-rose-300 font-semibold border border-rose-500/30">All (<span id="devCount-all">0</span>)</button>
+          <button onclick="setDevLogFilter('console')" id="devTab-console" class="px-2 py-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800">Console (<span id="devCount-console">0</span>)</button>
+          <button onclick="setDevLogFilter('network')" id="devTab-network" class="px-2 py-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800">Network (<span id="devCount-network">0</span>)</button>
+          <button onclick="setDevLogFilter('server')" id="devTab-server" class="px-2 py-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800">Server (<span id="devCount-server">0</span>)</button>
+          <button onclick="setDevLogFilter('errors')" id="devTab-errors" class="px-2 py-1 rounded text-slate-400 hover:text-red-400 hover:bg-slate-800">Errors (<span id="devCount-errors">0</span>)</button>
+          <button onclick="setDevLogFilter('jobs')" id="devTab-jobs" class="px-2 py-1 rounded text-slate-400 hover:text-purple-400 hover:bg-slate-800">Jobs (<span id="devCount-jobs">0</span>)</button>
+        </div>
+      </div>
+
+      <!-- Controls & Actions -->
+      <div class="flex items-center space-x-2">
+        <input type="text" id="devLogSearchInput" oninput="renderDevLogs()" placeholder="Filter logs..." class="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-[11px] text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 w-28 sm:w-44">
+        
+        <label class="flex items-center space-x-1 text-[11px] text-slate-400 cursor-pointer select-none px-1.5 py-1 rounded hover:bg-slate-800">
+          <input type="checkbox" id="devAutoScrollToggle" checked class="rounded bg-slate-950 border-slate-700 text-rose-500">
+          <span class="hidden sm:inline">Scroll</span>
+        </label>
+
+        <button onclick="copyAllDevLogs()" title="Copy all logs" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] border border-slate-700">
+          Copy
+        </button>
+
+        <button onclick="clearAllDevLogs()" title="Clear logs" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] border border-slate-700">
+          Clear
+        </button>
+
+        <button onclick="toggleDevConsoleMaximize()" title="Maximize / Restore" id="devMaximizeBtn" class="p-1 px-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px]">
+          ⤢
+        </button>
+
+        <button onclick="closeDevConsole()" title="Close (Ctrl+Z+Z or Esc)" class="p-1 px-2 rounded bg-slate-800 hover:bg-red-900/60 text-slate-300 hover:text-red-200 border border-slate-700 text-[11px]">
+          ✕
+        </button>
+      </div>
+    </div>
+
+    <!-- Dev Console Content / Log List -->
+    <div id="devLogsOutput" class="flex-1 overflow-y-auto p-2 bg-slate-950 font-mono text-[11px] select-text">
+      <!-- Dynamically injected log entries -->
+    </div>
+
+    <!-- Jobs Diagnostics Panel (Hidden by default, shown when Jobs tab active) -->
+    <div id="devJobsOutput" class="hidden flex-1 overflow-y-auto p-4 bg-slate-950 font-mono text-xs">
+      <!-- Dynamically injected jobs table -->
+    </div>
+
+    <!-- Status Footer -->
+    <div class="px-4 py-1.5 bg-slate-900/90 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-500">
+      <div class="flex items-center space-x-4">
+        <span>Backend: <span id="devBackendStatus" class="text-emerald-400 font-semibold">Online</span></span>
+        <span>Active Job: <span id="devActiveJobId" class="text-slate-300 font-semibold">None</span></span>
+      </div>
+      <div>
+        <span>Press <kbd class="px-1.5 py-0.5 rounded bg-slate-800 text-rose-300 border border-slate-700">Ctrl</kbd> + <kbd class="px-1 py-0.5 rounded bg-slate-800 text-rose-300 border border-slate-700">Z</kbd> + <kbd class="px-1 py-0.5 rounded bg-slate-800 text-rose-300 border border-slate-700">Z</kbd> to toggle</span>
+      </div>
+    </div>
+  </div>
+
   <script src="/static/app.js"></script>
 </body>
 </html>

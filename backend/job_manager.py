@@ -9,6 +9,7 @@ from backend.config import JOBS_DIR
 from backend.discovery import discover_youtube_candidates
 from backend.story_planner import plan_story_format_a, plan_shorts_format_b
 from backend.video_engine import render_format_a_story, render_format_b_shorts
+from backend.logger import add_server_log
 
 jobs_lock = threading.Lock()
 ACTIVE_JOBS: Dict[str, dict] = {}
@@ -77,6 +78,7 @@ def update_job_progress(job_id: str, progress: int, stage_message: str):
         job["updated_at"] = time.time()
         job["logs"].append(f"[{time.strftime('%H:%M:%S')}] {stage_message}")
         save_job_state(job_id, job)
+        add_server_log("INFO", "WORKER", f"[{job_id}] ({progress}%) {stage_message}", {"job_id": job_id, "progress": progress})
 
 def run_job_worker(job_id: str):
     """
@@ -163,11 +165,13 @@ def run_job_worker(job_id: str):
         job["current_stage"] = "Rendering complete! Ready for download and publishing."
         job["result"] = result
         save_job_state(job_id, job)
+        add_server_log("SUCCESS", "WORKER", f"[{job_id}] Video rendering completed successfully! Package ready.", {"job_id": job_id})
 
     except Exception as e:
         import traceback
         err_msg = f"{str(e)}\n{traceback.format_exc()}"
         print(f"Job {job_id} failed: {err_msg}")
+        add_server_log("ERROR", "WORKER", f"[{job_id}] Rendering worker failed: {str(e)}", {"job_id": job_id, "error": str(e)})
         job = get_job(job_id)
         if job:
             job["status"] = "failed"
